@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>天气卡片</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1c2e;
+      --card-bg: #1a2d47;
+      --accent: #4fc3f7;
+      --accent2: #a78bfa;
+      --text: #e8f4fd;
+      --text-dim: #7fa3bf;
+      --radius: 20px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background-image:
+        radial-gradient(ellipse at 20% 80%, rgba(79,195,247,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(167,139,250,0.08) 0%, transparent 60%);
+    }
+
+    .container { width: 100%; max-width: 480px; }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .title {
+      color: var(--text);
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .title span { color: var(--accent); }
+
+    .geo-btn {
+      background: rgba(79,195,247,0.15);
+      border: 1px solid rgba(79,195,247,0.3);
+      border-radius: 10px;
+      padding: 8px 14px;
+      color: var(--accent);
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: background 0.2s;
+    }
+    .geo-btn:hover { background: rgba(79,195,247,0.25); }
+    .geo-btn.loading { opacity: 0.6; pointer-events: none; }
+    .geo-btn .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 28px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: transform 0.3s ease;
+    }
+    .card:hover { transform: translateY(-2px); }
+
+    /* Quick cities */
+    .quick-cities {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .quick-btn {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .quick-btn:hover, .quick-btn.active {
+      background: rgba(79,195,247,0.15);
+      border-color: rgba(79,195,247,0.4);
+      color: var(--accent);
+    }
+
+    /* Search */
+    .search-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .search-row input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-row input:focus { border-color: var(--accent); }
+    .search-row input::placeholder { color: var(--text-dim); }
+    .search-btn {
+      padding: 12px 20px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .search-btn:hover { opacity: 0.9; }
+    .search-btn:active { transform: scale(0.97); }
+
+    /* Loading */
+    .loader {
+      display: none;
+      text-align: center;
+      padding: 20px;
+    }
+    .loader.show { display: block; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Weather Result */
+    .weather-result { display: none; }
+    .weather-result.show { display: block; }
+
+    .city-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .city-name { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+    .local-time { font-size: 0.75rem; color: var(--text-dim); margin-top: 3px; }
+
+    .weather-icon {
+      font-size: 5rem;
+      text-align: center;
+      margin: 12px 0;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+    }
+
+    .condition {
+      text-align: center;
+      color: var(--accent);
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+
+    .temp-block {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .temp-main {
+      font-size: 4rem;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1;
+    }
+    .temp-feels {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat {
+      background: rgba(255,255,255,0.04);
+      border-radius: 12px;
+      padding: 14px 10px;
+      text-align: center;
+    }
+    .stat-icon { font-size: 1.3rem; margin-bottom: 4px; }
+    .stat-val { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+    .stat-label { font-size: 0.7rem; color: var(--text-dim); margin-top: 2px; }
+
+    /* Forecast */
+    .forecast {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 16px;
+      gap: 8px;
+    }
+    .fc-day {
+      flex: 1;
+      background: rgba(255,255,255,0.04);
+      border-radius: 12px;
+      padding: 12px 6px;
+      text-align: center;
+    }
+    .fc-day.active {
+      background: rgba(79,195,247,0.1);
+      border: 1px solid rgba(79,195,247,0.2);
+    }
+    .fc-label { font-size: 0.72rem; color: var(--text-dim); margin-bottom: 4px; }
+    .fc-icon { font-size: 1.6rem; margin: 4px 0; }
+    .fc-temp { font-size: 0.85rem; color: var(--text); font-weight: 600; }
+    .fc-night { color: var(--text-dim); font-weight: 400; }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: rgba(255,255,255,0.06);
+      margin: 14px 0;
+    }
+
+    /* History */
+    .history-label {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .history-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .history-item {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .history-item:hover {
+      background: rgba(79,195,247,0.15);
+      color: var(--accent);
+    }
+
+    /* Error */
+    .error-msg {
+      display: none;
+      text-align: center;
+      padding: 20px;
+      color: #f87171;
+    }
+    .error-msg.show { display: block; }
+
+    /* Hint */
+    .hint {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      padding: 20px;
+    }
+
+    /* Mobile */
+    @media (max-width: 480px) {
+      .stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .stat { padding: 10px 6px; }
+      .temp-main { font-size: 3rem; }
+      .weather-icon { font-size: 4rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="title">🌤️ <span>天气卡片</span></h1>
+      <button class="geo-btn" id="geoBtn" onclick="geoLocate()">
+        <span class="dot"></span>定位
+      </button>
+    </div>
+
+    <div class="card">
+      <!-- Quick cities -->
+      <div class="quick-cities" id="quickCities"></div>
+
+      <div class="search-row">
+        <input type="text" id="cityInput" placeholder="输入城市名称（中文或英文）…" autocomplete="off">
+        <button class="search-btn" id="searchBtn">查询</button>
+      </div>
+
+      <div class="loader" id="loader">
+        <div class="spinner"></div>
+        <div style="color:var(--text-dim);font-size:0.85rem">查询中…</div>
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+
+      <div class="weather-result" id="weatherResult">
+        <div class="city-header">
+          <div>
+            <div class="city-name" id="cityName"></div>
+            <div class="local-time" id="localTime"></div>
+          </div>
+        </div>
+        <div class="weather-icon" id="weatherIcon">☀️</div>
+        <div class="condition" id="condition"></div>
+        <div class="temp-block">
+          <div class="temp-main" id="tempMain"></div>
+          <div class="temp-feels" id="tempFeels"></div>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-icon">💧</div>
+            <div class="stat-val" id="humidity"></div>
+            <div class="stat-label">湿度</div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon">🌬️</div>
+            <div class="stat-val" id="wind"></div>
+            <div class="stat-label">风速</div>
+          </div>
+          <div class="stat">
+            <div class="stat-icon">🧭</div>
+            <div class="stat-val" id="pressure"></div>
+            <div class="stat-label">气压</div>
+          </div>
+        </div>
+
+        <!-- Forecast -->
+        <div class="forecast" id="forecast"></div>
+
+        <div class="divider"></div>
+        <div class="history-label">最近搜索</div>
+        <div class="history-list" id="historyList"></div>
+      </div>
+
+      <div class="hint" id="hint">
+        试试：
+        <strong style="color:var(--accent);cursor:pointer" onclick="q('北京')">北京</strong>
+        &nbsp;·&nbsp;
+        <strong style="color:var(--accent);cursor:pointer" onclick="q('上海')">上海</strong>
+        &nbsp;·&nbsp;
+        <strong style="color:var(--accent);cursor:pointer" onclick="q('广州')">广州</strong>
+        &nbsp;·&nbsp;
+        <strong style="color:var(--accent);cursor:pointer" onclick="q('深圳')">深圳</strong>
+        &nbsp;·&nbsp;
+        <strong style="color:var(--accent);cursor:pointer" onclick="q('成都')">成都</strong>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const API_BASE = 'https://wttr.in';
+  const HISTORY_KEY = 'weather_history_v2';
+  const MAX_HISTORY = 5;
+
+  const $ = id => document.getElementById(id);
+  const cityInput = $('cityInput');
+  const searchBtn = $('searchBtn');
+  const loader = $('loader');
+  const weatherResult = $('weatherResult');
+  const errorMsg = $('errorMsg');
+  const hint = $('hint');
+  const geoBtn = $('geoBtn');
+
+  const QUICK_CITIES = [
+    { zh: '北京', en: 'Beijing' },
+    { zh: '上海', en: 'Shanghai' },
+    { zh: '广州', en: 'Guangzhou' },
+    { zh: '深圳', en: 'Shenzhen' },
+    { zh: '成都', en: 'Chengdu' },
+    { zh: '杭州', en: 'Hangzhou' },
+    { zh: '武汉', en: 'Wuhan' },
+    { zh: '西安', en: "Xi'an" },
+  ];
+
+  // Weather icon map
+  const iconMap = {
+    'sunny': '☀️', 'clear': '🌙',
+    'cloudy': '☁️', 'overcast': '☁️',
+    'partly cloudy': '⛅', 'mist': '🌫️', 'fog': '🌫️', 'haze': '🌫️',
+    'light rain': '🌦️', 'rain': '🌧️', 'heavy rain': '⛈️', 'drizzle': '🌦️',
+    'light snow': '🌨️', 'snow': '❄️', 'heavy snow': '🌨️',
+    'thunderstorm': '⛈️', 'sleet': '🌨️',
+    'windy': '💨', 'hot': '🔥', 'cold': '🥶',
+  };
+
+  function getIcon(text) {
+    const t = (text || '').toLowerCase();
+    for (const [k, v] of Object.entries(iconMap)) {
+      if (t.includes(k)) return v;
+    }
+    return '🌤️';
+  }
+
+  function getHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch { return []; }
+  }
+
+  function saveHistory(city) {
+    let h = getHistory().filter(c => c.toLowerCase() !== city.toLowerCase());
+    h.unshift(city);
+    h = h.slice(0, MAX_HISTORY);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+    renderHistory();
+  }
+
+  function renderQuickCities(activeCity) {
+    const container = $('quickCities');
+    container.innerHTML = QUICK_CITIES.map(c => {
+      const isActive = activeCity && c.zh === activeCity;
+      return `<button class="quick-btn${isActive ? ' active' : ''}" onclick="q('${c.zh}')">${c.zh}</button>`;
+    }).join('');
+  }
+
+  function renderHistory() {
+    const h = getHistory();
+    if (!h.length) {
+      $('historyList').innerHTML = '<span style="color:var(--text-dim);font-size:0.8rem">暂无记录</span>';
+      return;
+    }
+    $('historyList').innerHTML = h.map(c =>
+      `<span class="history-item" onclick="q('${c}')">${c}</span>`
+    ).join('');
+  }
+
+  function showLoader() {
+    loader.classList.add('show');
+    weatherResult.classList.remove('show');
+    errorMsg.classList.remove('show');
+    hint.style.display = 'none';
+  }
+
+  function showError(msg) {
+    loader.classList.remove('show');
+    weatherResult.classList.remove('show');
+    errorMsg.textContent = msg;
+    errorMsg.classList.add('show');
+  }
+
+  function showResult(data, forecast) {
+    loader.classList.remove('show');
+    errorMsg.classList.remove('show');
+    weatherResult.classList.add('show');
+
+    $('cityName').textContent = data.name;
+    const today = new Date();
+    $('localTime').textContent = today.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) +
+      ' · ' + today.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    $('weatherIcon').textContent = getIcon(data.weather);
+    $('condition').textContent = data.weather;
+    $('tempMain').textContent = data.temp + '°';
+    $('tempFeels').textContent = `体感 ${data.feelsLike}°C`;
+    $('humidity').textContent = data.humidity + '%';
+    $('wind').textContent = data.windSpeed;
+    $('pressure').textContent = data.pressure;
+
+    // Forecast
+    if (forecast && forecast.length) {
+      const fcLabels = ['今天', '明天', '后天'];
+      $('forecast').innerHTML = forecast.slice(0, 3).map((f, i) => `
+        <div class="fc-day${i === 0 ? ' active' : ''}">
+          <div class="fc-label">${fcLabels[i]}</div>
+          <div class="fc-icon">${getIcon(f.desc)}</div>
+          <div class="fc-temp">${f.maxTemp}° <span class="fc-night">${f.minTemp}°</span></div>
+        </div>
+      `).join('');
+    }
+  }
+
+  async function fetchWeather(city) {
+    const url = `${API_BASE}/${encodeURIComponent(city)}?format=j1`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`网络错误 (${resp.status})，请检查网络连接`);
+
+    const j = await resp.json();
+    const nearest = j.nearest_area;
+    if (!nearest || j.results === 'Unknown location specified') {
+      throw new Error(`未找到「${city}」，请检查拼写`);
+    }
+
+    const curr = j.current_condition[0];
+    const area = nearest[0];
+
+    // Parse forecast (next 3 days)
+    const forecast = [];
+    if (j.weather) {
+      j.weather.slice(0, 3).forEach(day => {
+        forecast.push({
+          maxTemp: day.maxtempC,
+          minTemp: day.mintempC,
+          desc: day.hourly[4] ? day.hourly[4].lang_zh[0].value : day.description,
+        });
+      });
+    }
+
+    return [
+      {
+        name: area.areaName[0].value,
+        country: area.country[0].value,
+        weather: curr.lang_zh[0].value,
+        temp: curr.temp_C,
+        feelsLike: curr.FeelsLikeC,
+        humidity: curr.humidity,
+        windSpeed: curr.windspeedKmph + ' km/h',
+        pressure: curr.pressure,
+        observationTime: curr.observation_time,
+      },
+      forecast,
+    ];
+  }
+
+  // Public search function (called by quick/history buttons)
+  window.q = function(city) {
+    cityInput.value = city;
+    doSearch(city);
+  };
+
+  async function doSearch(city) {
+    if (!city) { cityInput.focus(); return; }
+    showLoader();
+    try {
+      const [data, forecast] = await fetchWeather(city);
+      showResult(data, forecast);
+      saveHistory(city);
+      renderQuickCities(data.name.replace(/，.+$/, ''));
+      cityInput.value = city;
+    } catch (err) {
+      showError(err.message || '查询失败，请检查网络');
+    }
+  }
+
+  async function geoLocate() {
+    if (!navigator.geolocation) {
+      showError('浏览器不支持定位功能');
+      return;
+    }
+    geoBtn.classList.add('loading');
+    geoBtn.innerHTML = '<span class="dot"></span>定位中…';
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const { latitude: lat, longitude: lon } = pos.coords;
+        geoBtn.classList.remove('loading');
+        geoBtn.innerHTML = '<span class="dot"></span>定位';
+        // wttr.in supports lat/lon
+        doSearch(`${lat}:${lon}`);
+      },
+      err => {
+        geoBtn.classList.remove('loading');
+        geoBtn.innerHTML = '<span class="dot"></span>定位';
+        showError('定位失败，请检查浏览器权限设置');
+      },
+      { timeout: 10000 }
+    );
+  }
+
+  searchBtn.addEventListener('click', () => doSearch(cityInput.value.trim()));
+  cityInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(cityInput.value.trim()); });
+
+  // Init
+  renderQuickCities();
+  renderHistory();
+
+  // Auto-detect city on load (with CORS guard)
+  (async () => {
+    try {
+      const test = await fetch('https://wttr.in/Beijing?format=j1');
+      if (test.ok) doSearch('Beijing');
+    } catch (_) { /* no CORS, skip auto-load */ }
+  })();
+</script>
+</body>
+</html>
